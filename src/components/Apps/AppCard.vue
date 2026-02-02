@@ -21,6 +21,14 @@ export default {
     item: {
       type: Object,
     },
+    groups: {
+      type: Array,
+      default: () => [],
+    },
+    currentGroupId: {
+      type: String,
+      default: 'default',
+    },
   },
   data() {
     return {
@@ -38,6 +46,7 @@ export default {
       isSaving: false,
       isActiveTooltip: false,
       dropdownPosition: 'is-bottom-right',
+      showGroupMenu: false,
     }
   },
 
@@ -104,6 +113,9 @@ export default {
     shutDownClass() {
       return this.item.status !== 'running' ? 'shutdown-rounded' : ''
     },
+    availableGroups() {
+      return this.groups.filter(g => g.id !== this.currentGroupId)
+    },
 
   },
 
@@ -131,6 +143,19 @@ export default {
   },
 
   methods: {
+    moveToGroup(groupId) {
+      this.$refs.dro.isActive = false
+      this.showGroupMenu = false
+      this.$emit('moveToGroup', this.item.name, groupId)
+    },
+    createGroupAndMove() {
+      this.$refs.dro.isActive = false
+      this.showGroupMenu = false
+      this.$emit('createGroupAndMove', this.item.name)
+    },
+    toggleGroupMenu() {
+      this.showGroupMenu = !this.showGroupMenu
+    },
     handleDorpdownPosition(event) {
       this.$nextTick(() => {
         const rightOffset = window.innerWidth - event.clientX - 160
@@ -753,6 +778,29 @@ export default {
             }}
           </b-button>
 
+          <template v-if="groups.length > 0">
+            <b-button expanded type="is-text" @click="toggleGroupMenu">
+              {{ $t('Move to group...') }}
+            </b-button>
+            <div v-if="showGroupMenu" class="group-submenu">
+              <b-button
+                v-for="g in availableGroups" :key="g.id" expanded type="is-text" class="group-submenu-item"
+                @click="moveToGroup(g.id)"
+              >
+                {{ g.id === 'default' ? $t('Ungrouped') : g.name }}
+              </b-button>
+              <b-button expanded type="is-text" class="group-submenu-item" @click="createGroupAndMove">
+                {{ $t('New group...') }}
+              </b-button>
+            </div>
+            <b-button
+              v-if="currentGroupId !== 'default'" expanded type="is-text"
+              @click="moveToGroup('default')"
+            >
+              {{ $t('Remove from group') }}
+            </b-button>
+          </template>
+
           <b-button v-if="isLinkApp" class="mb-1" expanded type="is-text" @click="uninstallApp(true)">
             {{ $t('Delete') }}
             <b-loading v-model="isUninstalling" :is-full-page="false">
@@ -947,6 +995,18 @@ export default {
 
         .column:first-child {
           border-right: hsla(208, 16%, 94%, 1) 1px solid;
+        }
+      }
+
+      .group-submenu {
+        padding-left: 0.5rem;
+        border-left: 2px solid hsla(208, 16%, 90%, 1);
+        margin-left: 0.5rem;
+        margin-bottom: 2px;
+
+        .group-submenu-item {
+          font-size: 0.8rem !important;
+          height: 1.75rem !important;
         }
       }
 

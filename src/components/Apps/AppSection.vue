@@ -1,64 +1,80 @@
 <template>
 	<div class="home-section has-text-left">
-		<!-- Title Bar Start -->
-		<div class="is-flex is-align-items-center mb-4">
-			<app-section-title-tip
-				id="appTitle1"
-				class="is-flex-grow-1 has-text-sub-04"
-				label="Drag icons to sort."
-				title="Apps"
-			>
-			</app-section-title-tip>
+		<!-- Grouped App List Start -->
+		<div v-if="!isLoading">
+			<div v-for="group in groupedApps" :key="group.id" class="app-group">
+				<!-- Group Header (hidden for default group) -->
+				<div v-if="group.id !== 'default'" class="app-group-header is-flex is-align-items-center mb-3 mt-4">
+					<span
+						v-if="editingGroupId !== group.id"
+						class="app-group-name has-text-weight-semibold has-text-grey-100"
+						@dblclick="startRenameGroup(group.id)"
+					>{{ group.name }}</span>
+					<input
+						v-else
+						ref="groupNameInput"
+						v-model="editingGroupName"
+						class="app-group-name-input"
+						@blur="finishRenameGroup(group.id)"
+						@keyup.enter="finishRenameGroup(group.id)"
+						@keyup.esc="cancelRenameGroup"
+					/>
+					<b-dropdown animation="fade1" aria-role="menu" class="ml-2" position="is-bottom-left">
+						<template #trigger>
+							<b-icon
+								class="is-clickable has-text-grey-100"
+								icon="dots-vertical-outline"
+								pack="casa"
+								size="is-16"
+							></b-icon>
+						</template>
+						<b-dropdown-item aria-role="menuitem" @click="startRenameGroup(group.id)">
+							{{ $t('Rename') }}
+						</b-dropdown-item>
+						<b-dropdown-item aria-role="menuitem" class="has-text-red" @click="deleteGroup(group.id)">
+							{{ $t('Delete Group') }}
+						</b-dropdown-item>
+					</b-dropdown>
+				</div>
 
-			<b-dropdown animation="fade1" aria-role="menu" class="file-dropdown" position="is-bottom-left">
-				<template #trigger>
-					<b-icon
-						class="polymorphic is-clickable has-text-grey-100"
-						icon="plus-outline"
-						pack="casa"
-						size="is-24"
-					></b-icon>
-				</template>
-				<b-dropdown-item aria-role="menuitem" @click="showInstall(0, 'custom')">
-					{{ $t('Custom Install APP') }}
-				</b-dropdown-item>
-				<b-dropdown-item aria-role="menuitem" @click="showExternalLinkPanel">
-					{{ $t('Add external link/APP') }}
-				</b-dropdown-item>
-			</b-dropdown>
+				<!-- Draggable App Grid for this group -->
+				<draggable
+					v-model="group.apps"
+					:draggable="draggable"
+					class="app-list contextmenu-canvas"
+					tag="div"
+					v-bind="groupDragOptions"
+					@end="onSortEnd"
+					@start="drag = true"
+				>
+					<div v-for="item in group.apps" :id="'app-' + item.name" :key="'app-' + item.name" class="handle">
+						<app-card
+							:currentGroupId="group.id"
+							:groups="groupsMeta"
+							:item="item"
+							@configApp="showConfigPanel"
+							@createGroupAndMove="onCreateGroupAndMove"
+							@importApp="showContainerPanel"
+							@moveToGroup="onMoveAppToGroup"
+							@updateState="getList"
+						></app-card>
+					</div>
+				</draggable>
+
+				<!-- Empty group placeholder -->
+				<div v-if="group.apps.length === 0 && group.id !== 'default'" class="app-group-empty has-text-grey-light has-text-centered py-4">
+					{{ $t('Drag apps here') }}
+				</div>
+			</div>
 		</div>
-		<!-- Title Bar End -->
 
-		<!-- App List Start -->
-		<draggable
-			v-model="appList"
-			:draggable="draggable"
-			class="app-list contextmenu-canvas"
-			tag="div"
-			v-bind="dragOptions"
-			@end="onSortEnd"
-			@start="drag = true"
-		>
-			<!-- App Icon Card Start -->
-			<template v-if="!isLoading">
-				<div v-for="item in appList" :id="'app-' + item.name" :key="'app-' + item.name" class="handle">
-					<app-card
-						:item="item"
-						@configApp="showConfigPanel"
-						@importApp="showContainerPanel"
-						@updateState="getList"
-					></app-card>
-				</div>
-			</template>
-			<template v-else>
-				<div v-for="index in skCount" :id="'app-' + index" :key="'app-' + index" class="handle">
-					<app-card-skeleton :index="index"></app-card-skeleton>
-				</div>
-			</template>
-			<!-- App Icon Card End -->
-			<!-- <b-loading slot="footer" v-model="isLoading" :is-full-page="false"></b-loading> -->
-		</draggable>
-		<!-- App List End -->
+		<!-- Loading skeleton -->
+		<div v-else class="app-list contextmenu-canvas">
+			<div v-for="index in skCount" :id="'app-' + index" :key="'app-' + index" class="handle">
+				<app-card-skeleton :index="index"></app-card-skeleton>
+			</div>
+		</div>
+		<!-- Grouped App List End -->
 
 		<template v-if="oldAppList.length > 0">
 			<!-- Title Bar Start -->
@@ -99,19 +115,16 @@ import AppPanel from './AppPanel.vue'
 import ExternalLinkPanel from '@/components/Apps/ExternalLinkPanel'
 import AppSectionTitleTip from './AppSectionTitleTip.vue'
 import draggable from 'vuedraggable'
-import xor from 'lodash/xor'
 import concat from 'lodash/concat'
 import events from '@/events/events'
 import last from 'lodash/last'
 import business_ShowNewAppTag from '@/mixins/app/Business_ShowNewAppTag'
 import business_LinkApp from '@/mixins/app/Business_LinkApp'
-import isEqual from 'lodash/isEqual'
 import { ice_i18n } from '@/mixins/base/common-i18n'
 import YAML from 'yamljs'
 
 const SYNCTHING_STORE_ID = 74
 
-// meta_data :: build-in app
 const builtInApplications = [
 	{
 		id: '1',
@@ -136,13 +149,14 @@ const builtInApplications = [
 ]
 
 const orderConfig = 'app_order'
+const groupsConfig = 'app_groups'
 
 export default {
 	mixins: [business_ShowNewAppTag, business_LinkApp],
 	data () {
 		return {
 			user_id: localStorage.getItem('user_id'),
-			appList: [],
+			groupedApps: [],
 			oldAppList: [],
 			appConfig: {},
 			drag: false,
@@ -154,7 +168,9 @@ export default {
 			retryCount: 0,
 			appListErrorMessage: '',
 			skCount: 0,
-			ListRefreshTimer: null
+			ListRefreshTimer: null,
+			editingGroupId: null,
+			editingGroupName: ''
 		}
 	},
 	components: {
@@ -177,11 +193,29 @@ export default {
 				ghostClass: 'ghost'
 			}
 		},
+		groupDragOptions () {
+			return {
+				animation: 300,
+				group: { name: 'apps' },
+				disabled: false,
+				ghostClass: 'ghost'
+			}
+		},
 		showDragTip () {
 			return this.draggable === '.handle'
 		},
 		exsitingAppsShow () {
 			return this.$store.state.existingAppsSwitch
+		},
+		appList () {
+			let all = []
+			this.groupedApps.forEach(g => {
+				all = all.concat(g.apps)
+			})
+			return all
+		},
+		groupsMeta () {
+			return this.groupedApps.map(g => ({ id: g.id, name: g.name }))
 		}
 	},
 	created () {
@@ -196,7 +230,9 @@ export default {
 		})
 
 		this.ListRefreshTimer = setInterval(() => {
-			this.getList()
+			if (!this.drag) {
+				this.getList()
+			}
 		}, 5000)
 	},
 	beforeDestroy () {
@@ -231,18 +267,15 @@ export default {
 			}
 		},
 
-		/**
-		 * @description: Fetch the list of installed apps
-		 * @return {*} void
-		 */
 		async getList () {
+			if (this.drag) return
+
 			try {
 				const orgAppList = await this.$openAPI.appGrid.getAppGrid().then(res => res.data.data || [])
 				let orgOldAppList = [],
 					orgNewAppList = []
 				orgAppList.forEach(item => {
 					item.hostname = item.hostname || this.$baseIp
-					// Container app does not have icon.
 					item.icon = item.icon || require(`@/assets/img/app/default.svg`)
 					if (item.app_type === 'v1app' || item.app_type === 'container') {
 						orgOldAppList.push(item)
@@ -254,38 +287,100 @@ export default {
 
 				let listLinkApp = await this.getLinkAppList()
 				listLinkApp.forEach(item => {
-					// linkApp does not have title.
 					item.title = {
 						en_us: item.name
 					}
 				})
-				// all app list
+
 				let casaAppList = concat(builtInApplications, orgNewAppList, listLinkApp)
-				// get app sort info.
-				let lateSortList = await this.$api.users
-					.getCustomStorage(orderConfig)
-					.then(res => res.data.data.data || [])
 
-				// filter anything not in casaAppList.
-				const propList = casaAppList.map(obj => obj.name)
-				const existingList = lateSortList.filter(item => propList.includes(item))
-				const futureList = propList.filter(item => !lateSortList.includes(item))
-				const newSortList = existingList.concat(futureList)
-
-				// then sort.
-				const sortedAppList = casaAppList.sort((obj1, obj2) => {
-					return newSortList.indexOf(obj1.name) - newSortList.indexOf(obj2.name)
+				// Build a map of all apps by name
+				const allAppsMap = {}
+				casaAppList.forEach(app => {
+					allAppsMap[app.name] = app
 				})
+				const allAppNames = Object.keys(allAppsMap)
 
-				const sortedList = sortedAppList.map(obj => obj.name)
-				this.appList = sortedAppList
-				if (!isEqual(lateSortList, sortedList)) {
-					this.saveSortData()
+				// Try to fetch group data
+				let groupData = null
+				try {
+					const res = await this.$api.users.getCustomStorage(groupsConfig)
+					groupData = res.data.data
+				} catch (e) {
+					// No group data yet
+				}
+
+				if (groupData && groupData.version === 1 && Array.isArray(groupData.groups)) {
+					// Reconcile: remove uninstalled apps, add new apps to default
+					const usedNames = new Set()
+					groupData.groups.forEach(group => {
+						group.apps = group.apps.filter(name => {
+							if (allAppsMap[name]) {
+								usedNames.add(name)
+								return true
+							}
+							return false
+						})
+					})
+
+					// Find new apps not in any group
+					const newApps = allAppNames.filter(name => !usedNames.has(name))
+
+					// Ensure default group exists
+					let defaultGroup = groupData.groups.find(g => g.id === 'default')
+					if (!defaultGroup) {
+						defaultGroup = { id: 'default', name: '', apps: [] }
+						groupData.groups.unshift(defaultGroup)
+					}
+					defaultGroup.apps = defaultGroup.apps.concat(newApps)
+
+					// Resolve names to app objects
+					this.groupedApps = groupData.groups.map(g => ({
+						id: g.id,
+						name: g.name,
+						apps: g.apps.map(name => allAppsMap[name]).filter(Boolean)
+					}))
+
+					// Save if reconciliation changed anything
+					if (newApps.length > 0) {
+						this.saveGroupData()
+					}
+				} else {
+					// Migration: read app_order and create single default group
+					let lateSortList = []
+					try {
+						const res = await this.$api.users.getCustomStorage(orderConfig)
+						lateSortList = res.data.data.data || []
+					} catch (e) {
+						// No order data
+					}
+
+					// Sort apps by existing order
+					const propList = casaAppList.map(obj => obj.name)
+					const existingList = lateSortList.filter(item => propList.includes(item))
+					const futureList = propList.filter(item => !lateSortList.includes(item))
+					const sortedNames = existingList.concat(futureList)
+
+					const sortedAppList = casaAppList.sort((obj1, obj2) => {
+						return sortedNames.indexOf(obj1.name) - sortedNames.indexOf(obj2.name)
+					})
+
+					this.groupedApps = [{
+						id: 'default',
+						name: '',
+						apps: sortedAppList
+					}]
+
+					// Save as new group format
+					this.saveGroupData()
 				}
 
 				this.isLoading = false
 				this.retryCount = 0
 				this.appListErrorMessage = ''
+
+				// Also update app_order for backward compat
+				this.saveSortData()
 			} catch (error) {
 				console.error(error)
 				this.isLoading = true
@@ -304,47 +399,157 @@ export default {
 			}
 		},
 
-		/**
-		 * @description:
-		 * @param {Array} oriList
-		 * @param {Array} newList
-		 * @return {*}
-		 */
-		getNewSortList (oriList, newList) {
-			let xorList = xor(oriList, newList)
-			// xorList.reverse()
-			return concat(oriList, xorList)
+		saveGroupData () {
+			const data = {
+				version: 1,
+				groups: this.groupedApps.map(g => ({
+					id: g.id,
+					name: g.name,
+					apps: g.apps.map(app => app.name)
+				}))
+			}
+			this.$api.users.setCustomStorage(groupsConfig, data)
 		},
 
-		/**
-		 * @description: Save Sort Table
-		 * @param {*}
-		 * @return {*}
-		 */
 		saveSortData () {
-			let newList = this.appList.map(item => {
-				// compose milestone :: name is unique, global index.
-				return item.name
-			})
+			let newList = this.appList.map(item => item.name)
 			let data = {
 				data: newList
 			}
 			this.$api.users.setCustomStorage(orderConfig, data)
 		},
-		/**
-		 * @description: Handle on Sort End
-		 * @param {*}
-		 * @return {*}
-		 */
+
 		onSortEnd () {
 			this.drag = false
+			this.saveGroupData()
 			this.saveSortData()
 		},
 
-		/**
-		 * @description: Show Install Panel Programmatic
-		 * @return {*} void
-		 */
+		createGroup () {
+			this.$buefy.dialog.prompt({
+				title: this.$t('Create Group'),
+				message: this.$t('Group name'),
+				inputAttrs: {
+					placeholder: this.$t('Group name'),
+					maxlength: 50
+				},
+				confirmText: this.$t('Create'),
+				cancelText: this.$t('Cancel'),
+				trapFocus: true,
+				onConfirm: (value) => {
+					if (!value || !value.trim()) return
+					const newGroup = {
+						id: 'g_' + Date.now(),
+						name: value.trim(),
+						apps: []
+					}
+					this.groupedApps.push(newGroup)
+					this.saveGroupData()
+				}
+			})
+		},
+
+		deleteGroup (groupId) {
+			if (groupId === 'default') return
+
+			const group = this.groupedApps.find(g => g.id === groupId)
+			if (!group) return
+
+			this.$buefy.dialog.confirm({
+				title: this.$t('Delete Group'),
+				message: this.$t('Apps in this group will be moved to ungrouped.'),
+				confirmText: this.$t('Delete Group'),
+				cancelText: this.$t('Cancel'),
+				type: 'is-danger',
+				onConfirm: () => {
+					const defaultGroup = this.groupedApps.find(g => g.id === 'default')
+					if (defaultGroup) {
+						defaultGroup.apps = defaultGroup.apps.concat(group.apps)
+					}
+					this.groupedApps = this.groupedApps.filter(g => g.id !== groupId)
+					this.saveGroupData()
+					this.saveSortData()
+				}
+			})
+		},
+
+		startRenameGroup (groupId) {
+			const group = this.groupedApps.find(g => g.id === groupId)
+			if (!group || groupId === 'default') return
+			this.editingGroupId = groupId
+			this.editingGroupName = group.name
+			this.$nextTick(() => {
+				if (this.$refs.groupNameInput) {
+					const input = Array.isArray(this.$refs.groupNameInput)
+						? this.$refs.groupNameInput[0]
+						: this.$refs.groupNameInput
+					if (input) input.focus()
+				}
+			})
+		},
+
+		finishRenameGroup (groupId) {
+			const group = this.groupedApps.find(g => g.id === groupId)
+			if (group && this.editingGroupName.trim()) {
+				group.name = this.editingGroupName.trim()
+				this.saveGroupData()
+			}
+			this.editingGroupId = null
+			this.editingGroupName = ''
+		},
+
+		cancelRenameGroup () {
+			this.editingGroupId = null
+			this.editingGroupName = ''
+		},
+
+		onMoveAppToGroup (appName, targetGroupId) {
+			// Find source group
+			let sourceGroup = null
+			let appObj = null
+			for (const group of this.groupedApps) {
+				const idx = group.apps.findIndex(a => a.name === appName)
+				if (idx !== -1) {
+					sourceGroup = group
+					appObj = group.apps[idx]
+					group.apps.splice(idx, 1)
+					break
+				}
+			}
+			if (!appObj) return
+
+			const targetGroup = this.groupedApps.find(g => g.id === targetGroupId)
+			if (targetGroup) {
+				targetGroup.apps.push(appObj)
+			}
+			this.saveGroupData()
+			this.saveSortData()
+		},
+
+		onCreateGroupAndMove (appName) {
+			this.$buefy.dialog.prompt({
+				title: this.$t('Create Group'),
+				message: this.$t('Group name'),
+				inputAttrs: {
+					placeholder: this.$t('Group name'),
+					maxlength: 50
+				},
+				confirmText: this.$t('Create'),
+				cancelText: this.$t('Cancel'),
+				trapFocus: true,
+				onConfirm: (value) => {
+					if (!value || !value.trim()) return
+					const newGroup = {
+						id: 'g_' + Date.now(),
+						name: value.trim(),
+						apps: []
+					}
+					this.groupedApps.push(newGroup)
+					this.onMoveAppToGroup(appName, newGroup.id)
+				}
+			})
+		},
+
 		async showInstall (storeId = 0, mode = '') {
 			if (mode === 'custom') {
 				this.$messageBus('apps_custominstall')
@@ -382,12 +587,6 @@ export default {
 			})
 		},
 
-		/**
-		 * @description: Show Settings Panel Programmatic
-		 * @param {Object} {id:String,status:String }
-		 * @param {Boolean} isCasa
-		 * @return {*}
-		 */
 		async showConfigPanel (item, isCasa) {
 			let name = item.name
 			this.$messageBus('appsexsiting_open', name)
@@ -426,10 +625,8 @@ export default {
 						id: name,
 						state: 'update',
 						isCasa: isCasa,
-						// 区分 terminal
 						runningStatus: item.status,
 						configData: configData,
-						// settingData: ret.data,
 						settingComposeData: ret.data
 					}
 				})
@@ -500,7 +697,6 @@ export default {
 		},
 
 		scrollToNewApp () {
-			// business :: scroll to last position
 			let name = last(this.newAppIds)
 			let showEl = document.getElementById('app-' + name)
 			showEl?.scrollIntoView({ behavior: 'smooth', block: 'end' })
@@ -530,30 +726,21 @@ export default {
 			this.getList()
 		},
 		'app:apply-changes-error' (res) {
-			// toast info
 			this.messageBusToast(res.Properties.message, 'is-danger')
 		},
 		'app:apply-changes-end' (res) {
 			let languages = JSON.parse(res.Properties['app:title'])
 			const title = ice_i18n(languages)
-			// toast info
 			this.messageBusToast(title + ' is OK', 'is-success')
 
-			// business :: Tagging of new app / scrollIntoView
 			this.addIdToSessionStorage(res.Properties['app:name'])
 
 			this.getList().then(() => {
 				this.scrollToNewApp()
 			})
 		},
-		/**
-		 * @description: Update App Version
-		 * @param {Object} data
-		 * @return {void}
-		 */
 		'app:update-end' (data) {
 			if (data.Properties['docker:image:updated'] === 'true') {
-				// business :: Tagging of new app / scrollIntoView
 				this.addIdToSessionStorage(data.Properties['app:name'])
 
 				this.$buefy.toast.open({
@@ -585,17 +772,42 @@ export default {
 	position: relative;
 	display: grid;
 	gap: 1rem;
+	min-height: 2rem;
 
-	@include touch {
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-	}
+	grid-template-columns: repeat(auto-fill, minmax(0, 160px));
+}
 
-	@include desktop {
-		grid-template-columns: repeat(4, minmax(0, 1fr));
-	}
+.app-group {
+	margin-bottom: 0.5rem;
+}
 
-	@include fullhd {
-		grid-template-columns: repeat(5, minmax(0, 1fr));
+.app-group-header {
+	padding: 0.25rem 0;
+}
+
+.app-group-name {
+	font-size: 0.9rem;
+	cursor: default;
+	user-select: none;
+}
+
+.app-group-name-input {
+	font-size: 0.9rem;
+	font-weight: 600;
+	border: 1px solid hsla(208, 16%, 84%, 1);
+	border-radius: 4px;
+	padding: 0.1rem 0.4rem;
+	outline: none;
+	background: transparent;
+
+	&:focus {
+		border-color: hsla(208, 100%, 45%, 1);
 	}
+}
+
+.app-group-empty {
+	border: 2px dashed hsla(208, 16%, 88%, 1);
+	border-radius: 8px;
+	font-size: 0.85rem;
 }
 </style>
