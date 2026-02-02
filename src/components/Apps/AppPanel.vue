@@ -157,6 +157,7 @@ export default {
         // },
       },
       searchKey: '',
+      localSortField: 'title',
       currentCate: {},
       // currentAuthor: {},
       currentAuthor: { count: 0, font: 'author', id: 0, name: 'All' },
@@ -278,6 +279,35 @@ export default {
         }
         return false
       })
+    },
+    sortedAndGroupedList() {
+      const list = [...this.filteredPageList]
+      list.sort((a, b) => {
+        switch (this.localSortField) {
+          case 'title':
+            return a.title.localeCompare(b.title)
+          case 'category':
+            return (a.category || '').localeCompare(b.category || '') || a.title.localeCompare(b.title)
+          case 'installed': {
+            const aInst = this.installedList.includes(a.id) ? 0 : 1
+            const bInst = this.installedList.includes(b.id) ? 0 : 1
+            return aInst - bInst || a.title.localeCompare(b.title)
+          }
+          default:
+            return 0
+        }
+      })
+      const groups = []
+      const groupMap = {}
+      list.forEach((app) => {
+        const key = app.title.toLowerCase().trim()
+        if (!groupMap[key]) {
+          groupMap[key] = { title: app.title, icon: app.icon, tagline: app.tagline, category: app.category, apps: [] }
+          groups.push(groupMap[key])
+        }
+        groupMap[key].apps.push(app)
+      })
+      return groups
     },
     isMobile() {
       return this.$store.state.isMobile
@@ -1510,17 +1540,43 @@ export default {
           </div>
 
           <!-- List condition End -->
+          <!-- Sort controls Start -->
+          <div class="is-flex is-align-items-center mb-3">
+            <span class="is-size-7 has-text-grey mr-2">{{ $t('Sort by') }}:</span>
+            <b-button
+              :type="localSortField === 'title' ? 'is-primary is-light' : 'is-text'"
+              size="is-small"
+              @click="localSortField = 'title'"
+            >
+              {{ $t('Name') }}
+            </b-button>
+            <b-button
+              :type="localSortField === 'category' ? 'is-primary is-light' : 'is-text'"
+              size="is-small"
+              @click="localSortField = 'category'"
+            >
+              {{ $t('Category') }}
+            </b-button>
+            <b-button
+              :type="localSortField === 'installed' ? 'is-primary is-light' : 'is-text'"
+              size="is-small"
+              @click="localSortField = 'installed'"
+            >
+              {{ $t('Installed') }}
+            </b-button>
+          </div>
+          <!-- Sort controls End -->
           <!-- App list Start -->
           <div class="columns f-list is-multiline is-mobile pb-3 mb-5">
             <div
-              v-for="(item, index) in filteredPageList"
-              :key="index + item.title + item.id"
+              v-for="(group, index) in sortedAndGroupedList"
+              :key="'group_' + index + group.title"
               class="column app-item is-one-quarter"
             >
               <div class="is-flex">
-                <div class="mr-4 is-clickable" @click="showAppDetial(item.id)">
+                <div class="mr-4 is-clickable" @click="showAppDetial(group.apps[0].id)">
                   <b-image
-                    :src="item.icon"
+                    :src="group.icon"
                     :src-fallback="require('@/assets/img/app/default.svg')"
                     class="is-64x64 icon-shadow"
                     style="display: flex; align-items: center"
@@ -1530,46 +1586,81 @@ export default {
                 <div
                   class="is-flex-grow-1 mr-4 is-clickable"
                   @click="
-                    showAppDetial(item.id)
-                    $messageBus('appstore_detail', item.title)
+                    showAppDetial(group.apps[0].id)
+                    $messageBus('appstore_detail', group.title)
                   "
                 >
                   <h6 class="title is-6 mb-2">
-                    {{ item.title }}
+                    {{ group.title }}
                   </h6>
                   <p class="is-size-7 two-line">
-                    {{ item.tagline }}
+                    {{ group.tagline }}
                   </p>
                 </div>
               </div>
               <div class="mt-1 ml-7 is-flex is-align-items-center">
                 <div class="is-flex-grow-1 is-size-7 has-text-grey-light">
-                  {{ item.category }}
+                  {{ group.category }}
                 </div>
-                <b-button
-                  v-if="installedList.includes(item.id)"
-                  :loading="item.id == currentInstallId"
-                  rounded
-                  size="is-small"
-                  type="is-primary is-light"
-                  @click="openThirdContainerByAppInfo(item)"
-                >
-                  {{ $t('launch-and-open') }}
-                </b-button>
-                <b-button
-                  v-else
-                  :disabled="!item.architectures?.includes(arch)"
-                  :loading="item.id == currentInstallId"
-                  rounded
-                  size="is-small"
-                  type="is-primary is-light"
-                  @click="
-                    quickInstall(item.id)
-                    $messageBus('appstore_install', item.title)
-                  "
-                >
-                  {{ $t('Install') }}
-                </b-button>
+                <!-- Single source -->
+                <template v-if="group.apps.length === 1">
+                  <b-button
+                    v-if="installedList.includes(group.apps[0].id)"
+                    :loading="group.apps[0].id == currentInstallId"
+                    rounded
+                    size="is-small"
+                    type="is-primary is-light"
+                    @click="openThirdContainerByAppInfo(group.apps[0])"
+                  >
+                    {{ $t('launch-and-open') }}
+                  </b-button>
+                  <b-button
+                    v-else
+                    :disabled="!group.apps[0].architectures?.includes(arch)"
+                    :loading="group.apps[0].id == currentInstallId"
+                    rounded
+                    size="is-small"
+                    type="is-primary is-light"
+                    @click="
+                      quickInstall(group.apps[0].id)
+                      $messageBus('appstore_install', group.title)
+                    "
+                  >
+                    {{ $t('Install') }}
+                  </b-button>
+                </template>
+                <!-- Multiple sources -->
+                <template v-else>
+                  <b-dropdown :mobile-modal="false" position="is-bottom-left" aria-role="list">
+                    <template #trigger>
+                      <b-button
+                        rounded
+                        size="is-small"
+                        type="is-primary is-light"
+                        icon-right="menu-down"
+                      >
+                        {{ group.apps.some(a => installedList.includes(a.id)) ? $t('launch-and-open') : $t('Install') }} ({{ group.apps.length }})
+                      </b-button>
+                    </template>
+                    <b-dropdown-item
+                      v-for="source in group.apps"
+                      :key="source.id"
+                      aria-role="listitem"
+                      @click="
+                        installedList.includes(source.id)
+                          ? openThirdContainerByAppInfo(source)
+                          : quickInstall(source.id)
+                      "
+                    >
+                      <div class="is-flex is-align-items-center">
+                        <span class="is-flex-grow-1 is-size-7">{{ source.id }}</span>
+                        <b-tag v-if="installedList.includes(source.id)" type="is-success is-light" size="is-small" class="ml-2">
+                          {{ $t('Installed') }}
+                        </b-tag>
+                      </div>
+                    </b-dropdown-item>
+                  </b-dropdown>
+                </template>
               </div>
             </div>
           </div>
