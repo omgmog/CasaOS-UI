@@ -1,5 +1,6 @@
 <script>
 import AccountPanel from './account/AccountPanel.vue'
+import ExternalLinkPanel from '@/components/Apps/ExternalLinkPanel'
 import TerminalPanel from './logsAndTerminal/TerminalPanel.vue'
 import PortPanel from './settings/PortPanel.vue'
 import UpdateModal from './settings/UpdateModal.vue'
@@ -380,6 +381,24 @@ export default {
         canCancel: [],
         scroll: 'keep',
         animation: 'zoom-in',
+      })
+    },
+
+    showExternalLinkPanel() {
+      this.$buefy.modal.open({
+        parent: this,
+        component: ExternalLinkPanel,
+        hasModalCard: true,
+        customClass: '',
+        trapFocus: true,
+        canCancel: [''],
+        scroll: 'keep',
+        animation: 'zoom-in',
+        events: {
+          updateState: () => {
+            this.$messageBus('apps_external')
+          },
+        },
       })
     },
 
@@ -790,6 +809,20 @@ export default {
         </b-dropdown-item>
       </b-dropdown>
       <!-- Settings Dropmenu End -->
+
+      <!-- Add External Link Start -->
+      <div class="is-flex is-align-items-center ml-3 _fixed-height" @click="showExternalLinkPanel">
+        <b-tooltip
+          :active="!$store.state.isMobile"
+          :label="$t('Add external link/APP')"
+          position="is-right"
+          style="height: 1.25rem"
+          type="is-dark"
+        >
+          <b-icon class="picon" icon="plus-outline" pack="casa" size="is-20" />
+        </b-tooltip>
+      </div>
+      <!-- Add External Link End -->
 
       <!-- Terminal  Start -->
       <div class="is-flex is-align-items-center ml-3 _fixed-height" @click="showTerminalPanel">

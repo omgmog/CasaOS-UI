@@ -121,7 +121,6 @@ import last from 'lodash/last'
 import business_ShowNewAppTag from '@/mixins/app/Business_ShowNewAppTag'
 import business_LinkApp from '@/mixins/app/Business_LinkApp'
 import { ice_i18n } from '@/mixins/base/common-i18n'
-import YAML from 'yamljs'
 
 const SYNCTHING_STORE_ID = 74
 
@@ -155,15 +154,10 @@ export default {
 	mixins: [business_ShowNewAppTag, business_LinkApp],
 	data () {
 		return {
-			user_id: localStorage.getItem('user_id'),
 			groupedApps: [],
 			oldAppList: [],
-			appConfig: {},
 			drag: false,
 			isLoading: false,
-			isShowing: false,
-			importHelpText: 'Click icon to import.',
-			appHelpText: 'Drag icons to sort.',
 			draggable: '.handle',
 			retryCount: 0,
 			appListErrorMessage: '',
@@ -185,14 +179,6 @@ export default {
 		}
 	},
 	computed: {
-		dragOptions () {
-			return {
-				animation: 300,
-				group: 'description',
-				disabled: false,
-				ghostClass: 'ghost'
-			}
-		},
 		groupDragOptions () {
 			return {
 				animation: 300,
@@ -200,12 +186,6 @@ export default {
 				disabled: false,
 				ghostClass: 'ghost'
 			}
-		},
-		showDragTip () {
-			return this.draggable === '.handle'
-		},
-		exsitingAppsShow () {
-			return this.$store.state.existingAppsSwitch
 		},
 		appList () {
 			let all = []
@@ -554,7 +534,6 @@ export default {
 			if (mode === 'custom') {
 				this.$messageBus('apps_custominstall')
 			}
-			this.isShowing = true
 
 			const networks = await this.$api.container.getNetworks()
 			const memory = this.$store.state.hardwareInfo.mem
@@ -562,7 +541,6 @@ export default {
 				networks: networks.data.data,
 				memory: memory
 			}
-			this.isShowing = false
 			this.$buefy.modal.open({
 				parent: this,
 				component: AppPanel,
