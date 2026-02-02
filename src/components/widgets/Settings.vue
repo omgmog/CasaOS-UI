@@ -63,7 +63,11 @@ export default {
 		event: 'change'
 	},
 	props: {
-		widgetsSettings: Array
+		widgetsSettings: Array,
+		dropdownSide: {
+			type: String,
+			default: 'left',
+		},
 	},
 
 	watch: {
@@ -75,7 +79,8 @@ export default {
 				} else {
 					offsetTop = 251
 				}
-				this.position = offsetTop > 250 ? "is-top-left" : "is-bottom-left"
+				const verticalPos = offsetTop > 250 ? "top" : "bottom"
+				this.position = `is-${verticalPos}-${this.dropdownSide}`
 			},
 			deep: true
 		}

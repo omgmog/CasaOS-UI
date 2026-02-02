@@ -250,47 +250,30 @@ export default {
     <!-- NavBar End -->
 
     <!-- Content Start -->
-    <div class="contents  pt-55 contextmenu-canvas" @contextmenu.prevent="openHomeContaxtMenu">
-      <div class="container">
-        <div class="columns is-variable is-2">
-          <div class="column is-one-quarter slider-content">
-            <!-- SideBar Start -->
-            <SideBar v-if="!hardwareInfoLoading" />
-            <!-- SideBar End -->
+    <div class="contents pt-55 contextmenu-canvas" @contextmenu.prevent="openHomeContaxtMenu">
+      <div class="home-layout">
+        <div class="home-layout__left">
+          <SideBar v-if="!hardwareInfoLoading" side="left" parent-selector=".home-layout__left" />
+        </div>
+        <div :class="{ open: sidebarOpen }" class="home-layout__center">
+          <div class="contextmenu-canvas">
+            <section>
+              <transition name="fade">
+                <SearchBar v-if="searchbarShow" />
+              </transition>
+            </section>
+            <section>
+              <transition name="fade">
+                <CoreService />
+              </transition>
+            </section>
+            <section>
+              <AppSection ref="apps" />
+            </section>
           </div>
-          <div :class="{ open: sidebarOpen }" class="column is-three-quarters main-content">
-            <!-- MainContent Start -->
-            <div class=" contextmenu-canvas">
-              <!-- SearchBar Start -->
-              <section>
-                <transition name="fade">
-                  <SearchBar v-if="searchbarShow" />
-                </transition>
-              </section>
-              <!-- SearchBar End -->
-
-              <!-- core-service Start -->
-              <section>
-                <transition name="fade">
-                  <CoreService />
-                </transition>
-              </section>
-              <!-- core-service End -->
-
-              <!-- Apps Start -->
-              <section>
-                <AppSection ref="apps" />
-              </section>
-              <!-- Apps End -->
-
-              <!-- Shortcuts Start -->
-              <!-- <section>
-								<shortcuts></shortcuts>
-							</section> -->
-              <!-- Shortcuts End -->
-            </div>
-            <!-- MainContent End -->
-          </div>
+        </div>
+        <div class="home-layout__right">
+          <SideBar v-if="!hardwareInfoLoading" side="right" storage-key="widgets_config_right" parent-selector=".home-layout__right" />
         </div>
       </div>
     </div>
@@ -322,12 +305,24 @@ export default {
     height: calc(100% - 7rem);
 }
 
-.main-content {
-    z-index: 10;
+.home-layout {
+    display: flex;
+    gap: 1rem;
+    padding: 0 2rem;
+    height: 100%;
+}
 
-    @include until-widescreen {
-        width: calc(100% - 18rem);
-    }
+.home-layout__left,
+.home-layout__right {
+    flex: 0 0 18rem;
+    min-width: 18rem;
+    position: relative;
+}
+
+.home-layout__center {
+    flex: 1 1 auto;
+    min-width: 0;
+    z-index: 10;
 }
 
 .dark-bg {
@@ -348,16 +343,19 @@ export default {
     }
 }
 
-.slider-content {
-    min-width: 18rem;
-    position: relative;
-    // height: calc(100vh - 6rem);
-}
-
 @media screen and (max-width: 480px) {
-    .slider-content {
+    .home-layout {
+        display: block;
+        padding: 0;
+    }
+
+    .home-layout__left {
         position: absolute;
         width: 100%;
+    }
+
+    .home-layout__right {
+        display: none;
     }
 
     .contents {
@@ -365,21 +363,7 @@ export default {
         padding-bottom: 1rem;
     }
 
-    .container {
-        padding-bottom: 1rem;
-    }
-
-    .columns {
-        height: 100%;
-    }
-
-    .column {
-        padding: 0;
-        width: 100%;
-        right: 0;
-    }
-
-    .main-content {
+    .home-layout__center {
         margin-left: 0;
         transition: all 0.3s;
 
@@ -390,9 +374,9 @@ export default {
     }
 }
 
-@media screen and (max-width: $tablet) {
-    .columns {
-        display: flex;
+@media screen and (min-width: 481px) and (max-width: 1023px) {
+    .home-layout__right {
+        display: none;
     }
 }
 </style>

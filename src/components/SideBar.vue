@@ -13,13 +13,25 @@ const widgetsComponents = require.context(
   /.vue$/,
 )
 
-const widgetsConfig = 'widgets_config'
-
 export default {
   name: 'SideBar',
   components: {
     Settings,
     VueCustomScrollbar: vueCustomScrollbar,
+  },
+  props: {
+    storageKey: {
+      type: String,
+      default: 'widgets_config',
+    },
+    parentSelector: {
+      type: String,
+      default: '.home-layout__left',
+    },
+    side: {
+      type: String,
+      default: 'left',
+    },
   },
   data() {
     return {
@@ -83,7 +95,7 @@ export default {
      */
     getConfig() {
       const initData = this.getInitData()
-      this.$api.users.getCustomStorage(widgetsConfig).then((res) => {
+      this.$api.users.getCustomStorage(this.storageKey).then((res) => {
         if (res.status === 200) {
           if (res.data === '') {
             this.saveData(initData)
@@ -138,7 +150,7 @@ export default {
      * @return {*} void
      */
     saveData(data) {
-      this.$api.users.setCustomStorage(widgetsConfig, data).then((res) => {
+      this.$api.users.setCustomStorage(this.storageKey, data).then((res) => {
         if (res.data.success === 200) {
           this.widgetsSettings = res.data.data
         }
@@ -154,7 +166,10 @@ export default {
       const ww = window.innerWidth
       if (this.isLoading)
         return false
-      const parentWidth = document.querySelector('.slider-content').offsetWidth
+      const parentEl = document.querySelector(this.parentSelector)
+      if (!parentEl)
+        return false
+      const parentWidth = parentEl.offsetWidth
       this.$nextTick(() => {
         const padding = ww <= 480 ? 0 : -16
         this.$refs.sidebar.style.width = `${parentWidth + padding}px`
@@ -166,13 +181,13 @@ export default {
 </script>
 
 <template>
-  <div v-if="!isLoading" ref="sidebar" :class="{ open: sidebarOpen }" class="side-bar contextmenu-canvas">
+  <div v-if="!isLoading" ref="sidebar" :class="[{ open: sidebarOpen }, `side-bar--${side}`]" class="side-bar contextmenu-canvas">
     <VueCustomScrollbar :settings="scrollSettings" class="scroll-area contextmenu-canvas">
       <div v-for="(item, index) in activeApps" :key="`widgets_${index}`">
         <component :is="item.app" :class="{ 'last-block': index === activeApps.length - 1 }" />
       </div>
     </VueCustomScrollbar>
-    <Settings v-model="widgetsSettings" :class="{ 'mt-4': activeApps.length > 0 }" @change="handleChange" />
+    <Settings v-model="widgetsSettings" :dropdown-side="side" :class="{ 'mt-4': activeApps.length > 0 }" @change="handleChange" />
   </div>
 </template>
 
@@ -184,6 +199,10 @@ export default {
     overflow: inherit !important;
     position: fixed;
 
+    &--right {
+        right: 2rem;
+    }
+
     @include until(480px) {
         z-index: 20;
         left: 0rem;
@@ -194,6 +213,10 @@ export default {
 
         &.open {
             transform: translateX(0);
+        }
+
+        &.side-bar--right {
+            display: none;
         }
     }
 }
