@@ -158,6 +158,7 @@ export default {
       },
       searchKey: '',
       localSortField: 'title',
+      appListView: 'grid',
       currentCate: {},
       // currentAuthor: {},
       currentAuthor: { count: 0, font: 'author', id: 0, name: 'All' },
@@ -1461,7 +1462,7 @@ export default {
           </div>
 
           <!-- List condition End -->
-          <!-- Sort controls Start -->
+          <!-- Sort & view controls Start -->
           <div class="is-flex is-align-items-center mb-3">
             <span class="is-size-7 has-text-grey mr-2">{{ $t('Sort by') }}:</span>
             <b-button
@@ -1485,13 +1486,29 @@ export default {
             >
               {{ $t('Installed') }}
             </b-button>
+            <div class="is-flex-grow-1" />
+            <div class="view-toggle">
+              <b-button
+                :type="appListView === 'grid' ? 'is-primary is-light' : 'is-text'"
+                size="is-small"
+                icon-left="view-grid"
+                @click="appListView = 'grid'"
+              />
+              <b-button
+                :type="appListView === 'list' ? 'is-primary is-light' : 'is-text'"
+                size="is-small"
+                icon-left="view-list"
+                @click="appListView = 'list'"
+              />
+            </div>
           </div>
-          <!-- Sort controls End -->
-          <!-- App list Start -->
-          <div class="columns f-list is-multiline is-mobile pb-3 mb-5">
+          <!-- Sort & view controls End -->
+
+          <!-- Grid view Start -->
+          <div v-if="appListView === 'grid'" class="columns f-list is-multiline is-mobile pb-3 mb-5">
             <div
               v-for="(group, index) in sortedAndGroupedList"
-              :key="'group_' + index + group.title"
+              :key="'grid_' + index + group.title"
               class="column app-item is-one-quarter"
             >
               <div class="is-flex">
@@ -1585,6 +1602,106 @@ export default {
               </div>
             </div>
           </div>
+          <!-- Grid view End -->
+
+          <!-- List view Start -->
+          <div v-else class="app-list-view pb-3 mb-5">
+            <div class="app-list-header is-flex is-align-items-center px-3 py-2">
+              <div class="app-list-col--icon" />
+              <div class="app-list-col--name is-flex-grow-1 is-size-7 has-text-grey has-text-weight-semibold">{{ $t('Name') }}</div>
+              <div class="app-list-col--category is-size-7 has-text-grey has-text-weight-semibold">{{ $t('Category') }}</div>
+              <div class="app-list-col--action is-size-7 has-text-grey has-text-weight-semibold has-text-right">{{ $t('Actions') }}</div>
+            </div>
+            <div
+              v-for="(group, index) in sortedAndGroupedList"
+              :key="'list_' + index + group.title"
+              class="app-list-row is-flex is-align-items-center px-3 py-2"
+            >
+              <div class="app-list-col--icon mr-3 is-clickable" @click="showAppDetial(group.apps[0].id)">
+                <b-image
+                  :src="group.icon"
+                  :src-fallback="require('@/assets/img/app/default.svg')"
+                  class="is-32x32 icon-shadow"
+                  webp-fallback=".jpg"
+                />
+              </div>
+              <div
+                class="app-list-col--name is-flex-grow-1 is-clickable"
+                @click="
+                  showAppDetial(group.apps[0].id)
+                  $messageBus('appstore_detail', group.title)
+                "
+              >
+                <span class="has-text-weight-semibold">{{ group.title }}</span>
+                <span class="is-size-7 has-text-grey ml-2">{{ group.tagline }}</span>
+              </div>
+              <div class="app-list-col--category is-size-7 has-text-grey-light">
+                {{ group.category }}
+              </div>
+              <div class="app-list-col--action has-text-right">
+                <!-- Single source -->
+                <template v-if="group.apps.length === 1">
+                  <b-button
+                    v-if="installedList.includes(group.apps[0].id)"
+                    :loading="group.apps[0].id == currentInstallId"
+                    rounded
+                    size="is-small"
+                    type="is-primary is-light"
+                    @click="openThirdContainerByAppInfo(group.apps[0])"
+                  >
+                    {{ $t('launch-and-open') }}
+                  </b-button>
+                  <b-button
+                    v-else
+                    :disabled="!group.apps[0].architectures?.includes(arch)"
+                    :loading="group.apps[0].id == currentInstallId"
+                    rounded
+                    size="is-small"
+                    type="is-primary is-light"
+                    @click="
+                      quickInstall(group.apps[0].id)
+                      $messageBus('appstore_install', group.title)
+                    "
+                  >
+                    {{ $t('Install') }}
+                  </b-button>
+                </template>
+                <!-- Multiple sources -->
+                <template v-else>
+                  <b-dropdown :mobile-modal="false" position="is-bottom-left" aria-role="list">
+                    <template #trigger>
+                      <b-button
+                        rounded
+                        size="is-small"
+                        type="is-primary is-light"
+                        icon-right="menu-down"
+                      >
+                        {{ group.apps.some(a => installedList.includes(a.id)) ? $t('launch-and-open') : $t('Install') }} ({{ group.apps.length }})
+                      </b-button>
+                    </template>
+                    <b-dropdown-item
+                      v-for="source in group.apps"
+                      :key="source.id"
+                      aria-role="listitem"
+                      @click="
+                        installedList.includes(source.id)
+                          ? openThirdContainerByAppInfo(source)
+                          : quickInstall(source.id)
+                      "
+                    >
+                      <div class="is-flex is-align-items-center">
+                        <span class="is-flex-grow-1 is-size-7">{{ source.id }}</span>
+                        <b-tag v-if="installedList.includes(source.id)" type="is-success is-light" size="is-small" class="ml-2">
+                          {{ $t('Installed') }}
+                        </b-tag>
+                      </div>
+                    </b-dropdown-item>
+                  </b-dropdown>
+                </template>
+              </div>
+            </div>
+          </div>
+          <!-- List view End -->
 
           <!-- App list End -->
 
@@ -2208,5 +2325,57 @@ search-fade-leave-active {
 .slide-fade-enter-from {
     transform: translateX(20px);
     opacity: 0;
+}
+
+.view-toggle {
+    display: inline-flex;
+    gap: 2px;
+}
+
+.app-list-view {
+    border: 1px solid hsl(0, 0%, 93%);
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+.app-list-header {
+    background: hsl(0, 0%, 97%);
+    border-bottom: 1px solid hsl(0, 0%, 93%);
+}
+
+.app-list-row {
+    border-bottom: 1px solid hsl(0, 0%, 95%);
+    transition: background 0.15s ease;
+
+    &:last-child {
+        border-bottom: none;
+    }
+
+    &:hover {
+        background: hsl(0, 0%, 97%);
+    }
+}
+
+.app-list-col--icon {
+    flex: 0 0 2.5rem;
+}
+
+.app-list-col--category {
+    flex: 0 0 8rem;
+    text-align: center;
+}
+
+.app-list-col--action {
+    flex: 0 0 9rem;
+}
+
+@media screen and (max-width: 768px) {
+    .app-list-col--category {
+        display: none;
+    }
+
+    .app-list-col--action {
+        flex: 0 0 6rem;
+    }
 }
 </style>
